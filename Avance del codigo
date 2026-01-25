@@ -1,0 +1,1045 @@
+package main
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+/*
+Sistema de Gestión de Libros Electrónicos (Go) - Proyecto mínimo completo
+
+Incluye:
+- Auth con tokens (roles admin/lector)
+- Catálogo CRUD (admin)
+- Búsqueda y filtros
+- Biblioteca personal (favoritos, progreso)
+- Pago simulado (checkout + confirmación)
+- Descarga segura (solo si pago aprobado o libro gratis)
+- Operaciones/Auditoría (eventos)
+*/
+
+const storageRoot = "./storage"
+
+// -----------------------------
+// Modelos
+// -----------------------------
+type Role string
+
+const (
+	RoleAdmin Role = "admin"
+	RoleLector Role = "lector"
+)
+
+type User struct {
+	ID           int64 `json:"id"`
+	Nombre       string `json:"nombre"`
+	Correo       string `json:"correo"`
+	PasswordHash string `json:"-"`
+	Rol          Role   `json:"rol"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type Book struct {
+	ID          int64  `json:"id"`
+	Titulo      string `json:"titulo"`
+	Autor       string `json:"autor"`
+	Genero      string `json:"genero"`
+	Descripcion string `json:"descripcion"`
+	Idioma      string `json:"idioma"`
+	Formato     string `json:"formato"` // pdf / epub
+	Anio        int    `json:"anio"`
+	Palabras    []string `json:"palabras"`
+	Activo      bool   `json:"activo"`
+	Precio      float64 `json:"precio"`
+	Gratis      bool   `json:"gratis"`
+
+	// Archivo
+	FileName    string `json:"file_name"`     // ej: "manual-go.pdf"
+	StoragePath string `json:"storage_path"`  // ej: "ebooks/10/"
+}
+
+type LibraryItem struct {
+	UserID     int64 `json:"user_id"`
+	BookID     int64 `json:"book_id"`
+	Favorito   bool  `json:"favorito"`
+	Progreso   int   `json:"progreso"` // 0-100
+	AddedAt    time.Time `json:"added_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type OrderStatus string
+const (
+	OrderPending  OrderStatus = "pendiente"
+	OrderApproved OrderStatus = "aprobado"
+	OrderRejected OrderStatus = "rechazado"
+)
+
+type Order struct {
+	ID          int64 `json:"id"`
+	UserID      int64 `json:"user_id"`
+	BookID      int64 `json:"book_id"`
+	Monto       float64 `json:"monto"`
+	Estado      OrderStatus `json:"estado"`
+	CreatedAt   time.Time `json:"created_at"`
+	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
+	Transaccion string `json:"transaccion,omitempty"`
+}
+
+type Event struct {
+	ID        int64 `json:"id"`
+	Tipo      string `json:"tipo"` // alta_libro, edicion_libro, login, checkout, pago, descarga, etc.
+	UserID    int64  `json:"user_id"`
+	BookID    int64  `json:"book_id"`
+	Estado    string `json:"estado"` // ok / fail / info
+	Detalle   string `json:"detalle"`
+	When      time.Time `json:"when"`
+}
+
+// -----------------------------
+// “Base de datos” en memoria (para proyecto académico)
+// -----------------------------
+type Store struct {
+	mu sync.Mutex
+
+	nextUserID  int64
+	nextBookID  int64
+	nextOrderID int64
+	nextEventID int64
+
+	usersByID    map[int64]*User
+	usersByEmail map[string]*User
+
+	booksByID map[int64]*Book
+
+	library map[string]*LibraryItem // key: userID:bookID
+
+	ordersByID map[int64]*Order
+
+	// token -> userID
+	tokens map[string]int64
+
+	events []*Event
+}
+
+func NewStore() *Store {
+	s := &Store{
+		nextUserID:  1,
+		nextBookID:  10,
+		nextOrderID: 100,
+		nextEventID: 1,
+		usersByID:    make(map[int64]*User),
+		usersByEmail: make(map[string]*User),
+		booksByID:    make(map[int64]*Book),
+		library:      make(map[string]*LibraryItem),
+		ordersByID:   make(map[int64]*Order),
+		tokens:       make(map[string]int64),
+		events:       []*Event{},
+	}
+
+	// Seed admin (para pruebas)
+	admin := &User{
+		ID:           s.nextUserID,
+		Nombre:       "Admin",
+		Correo:       "admin@demo.com",
+		PasswordHash: hashPassword("Admin123!"),
+		Rol:          RoleAdmin,
+		CreatedAt:    time.Now(),
+	}
+	s.nextUserID++
+	s.usersByID[admin.ID] = admin
+	s.usersByEmail[strings.ToLower(admin.Correo)] = admin
+
+	// Seed libro ejemplo
+	book := &Book{
+		ID:          s.nextBookID,
+		Titulo:      "Manual de Go",
+		Autor:       "Go Team",
+		Genero:      "Programación",
+		Descripcion: "Libro de prueba para el sistema.",
+		Idioma:      "ES",
+		Formato:     "pdf",
+		Anio:        2025,
+		Palabras:    []string{"go", "backend", "api"},
+		Activo:      true,
+		Precio:      5.00,
+		Gratis:      false,
+		FileName:    "manual-go.pdf",
+		StoragePath: fmt.Sprintf("ebooks/%d/", s.nextBookID),
+	}
+	s.booksByID[book.ID] = book
+	s.nextBookID++
+
+	return s
+}
+
+// -----------------------------
+// Utilidades: JSON / respuestas
+// -----------------------------
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func readJSON(r *http.Request, dst any) error {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return errors.New("body vacío")
+	}
+	return json.Unmarshal(body, dst)
+}
+
+func badRequest(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusBadRequest, map[string]any{"error": msg})
+}
+
+func forbidden(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg})
+}
+
+func unauthorized(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": msg})
+}
+
+// -----------------------------
+// Seguridad simple (para demo)
+// Nota: en producción usa bcrypt.
+// -----------------------------
+func hashPassword(pw string) string {
+	sum := sha256.Sum256([]byte("SALT_DEMO::" + pw))
+	return hex.EncodeToString(sum[:])
+}
+
+func randomToken() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// -----------------------------
+// Auditoría / Eventos (Módulo G / E)
+// -----------------------------
+func (s *Store) addEvent(tipo string, userID, bookID int64, estado, detalle string) {
+	s.nextEventID++
+	ev := &Event{
+		ID:      s.nextEventID - 1,
+		Tipo:    tipo,
+		UserID:  userID,
+		BookID:  bookID,
+		Estado:  estado,
+		Detalle: detalle,
+		When:    time.Now(),
+	}
+	s.events = append(s.events, ev)
+}
+
+// -----------------------------
+// Auth helpers (Módulo A)
+// -----------------------------
+func (s *Store) authFromRequest(r *http.Request) (*User, error) {
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return nil, errors.New("falta Authorization")
+	}
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return nil, errors.New("Authorization inválido. Use: Bearer <token>")
+	}
+	token := parts[1]
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	uid, ok := s.tokens[token]
+	if !ok {
+		return nil, errors.New("token inválido")
+	}
+	u, ok := s.usersByID[uid]
+	if !ok {
+		return nil, errors.New("usuario no existe")
+	}
+	return u, nil
+}
+
+func requireRole(u *User, rol Role) error {
+	if u.Rol != rol {
+		return errors.New("sin permisos")
+	}
+	return nil
+}
+
+// -----------------------------
+// Descarga segura (Módulo F)
+// -----------------------------
+func safeJoinStorage(root, relDir, fileName string) (string, error) {
+	relDir = filepath.Clean(relDir)
+	fileName = filepath.Base(fileName)
+
+	full := filepath.Join(root, relDir, fileName)
+	fullClean := filepath.Clean(full)
+
+	rootAbs, _ := filepath.Abs(root)
+	fullAbs, _ := filepath.Abs(fullClean)
+
+	if !strings.HasPrefix(fullAbs, rootAbs+string(os.PathSeparator)) && fullAbs != rootAbs {
+		return "", errors.New("ruta inválida")
+	}
+	return fullAbs, nil
+}
+
+func contentTypeForExt(ext string) string {
+	ext = strings.ToLower(ext)
+	if ext == ".pdf" {
+		return "application/pdf"
+	}
+	if ext == ".epub" {
+		return "application/epub+zip"
+	}
+	if t := mime.TypeByExtension(ext); t != "" {
+		return t
+	}
+	return "application/octet-stream"
+}
+
+// -----------------------------
+// HTTP Router básico
+// -----------------------------
+func main() {
+	store := NewStore()
+
+	// Rutas (API sencilla)
+	mux := http.NewServeMux()
+
+	// Health
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"ok": true,
+			"msg": "Sistema de Gestión de Libros Electrónicos (Go)",
+			"endpoints": []string{
+				"POST /auth/register",
+				"POST /auth/login",
+				"GET  /books?q=&genero=&formato=&idioma=&minPrice=&maxPrice=",
+				"POST /admin/books (admin)",
+				"PUT  /admin/books/{id} (admin)",
+				"DELETE /admin/books/{id} (admin)",
+				"POST /me/library/{bookId}",
+				"DELETE /me/library/{bookId}",
+				"POST /me/library/{bookId}/favorite",
+				"POST /me/library/{bookId}/progress",
+				"POST /checkout/{bookId}",
+				"POST /payments/{orderId}/confirm?status=aprobado|rechazado",
+				"GET  /books/{id}/download",
+				"GET  /admin/events (admin)",
+			},
+		})
+	})
+
+	// Módulo A
+	mux.HandleFunc("/auth/register", store.handleRegister)
+	mux.HandleFunc("/auth/login", store.handleLogin)
+
+	// Módulos B + C
+	mux.HandleFunc("/books", store.handleListBooks)
+	mux.HandleFunc("/admin/books", store.handleAdminBooks)       // POST
+	mux.HandleFunc("/admin/books/", store.handleAdminBookByID)   // PUT/DELETE
+
+	// Módulo D
+	mux.HandleFunc("/me/library/", store.handleLibraryRoutes)
+
+	// Módulo H
+	mux.HandleFunc("/checkout/", store.handleCheckout)                 // POST /checkout/{bookId}
+	mux.HandleFunc("/payments/", store.handlePaymentConfirm)          // POST /payments/{orderId}/confirm
+
+	// Módulo F + H + E + G
+	mux.HandleFunc("/books/", store.handleBookByIDRoutes) // download: /books/{id}/download
+
+	// Auditoría
+	mux.HandleFunc("/admin/events", store.handleAdminEvents)
+
+	fmt.Println("Servidor activo en http://localhost:8080")
+	fmt.Println("Admin demo: admin@demo.com / Admin123!")
+	fmt.Println("Recuerda poner archivos en: storage/ebooks/<id>/<fileName>")
+	_ = http.ListenAndServe(":8080", mux)
+}
+
+// -----------------------------
+// Handlers - Auth (Módulo A)
+// -----------------------------
+func (s *Store) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		badRequest(w, "Use POST")
+		return
+	}
+	var req struct{
+		Nombre string `json:"nombre"`
+		Correo string `json:"correo"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		badRequest(w, "JSON inválido: "+err.Error())
+		return
+	}
+	req.Correo = strings.TrimSpace(strings.ToLower(req.Correo))
+	if req.Nombre == "" || req.Correo == "" || req.Password == "" {
+		badRequest(w, "nombre/correo/password son requeridos")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.usersByEmail[req.Correo]; exists {
+		s.addEvent("register", 0, 0, "fail", "correo ya existe")
+		badRequest(w, "Ese correo ya está registrado")
+		return
+	}
+	u := &User{
+		ID: s.nextUserID,
+		Nombre: req.Nombre,
+		Correo: req.Correo,
+		PasswordHash: hashPassword(req.Password),
+		Rol: RoleLector,
+		CreatedAt: time.Now(),
+	}
+	s.nextUserID++
+	s.usersByID[u.ID] = u
+	s.usersByEmail[u.Correo] = u
+	s.addEvent("register", u.ID, 0, "ok", "registro lector")
+
+	writeJSON(w, 201, map[string]any{
+		"msg": "Usuario registrado",
+		"user": map[string]any{"id": u.ID, "nombre": u.Nombre, "correo": u.Correo, "rol": u.Rol},
+	})
+}
+
+func (s *Store) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		badRequest(w, "Use POST")
+		return
+	}
+	var req struct{
+		Correo string `json:"correo"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		badRequest(w, "JSON inválido: "+err.Error())
+		return
+	}
+	req.Correo = strings.TrimSpace(strings.ToLower(req.Correo))
+	if req.Correo == "" || req.Password == "" {
+		badRequest(w, "correo/password requeridos")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	u, ok := s.usersByEmail[req.Correo]
+	if !ok || u.PasswordHash != hashPassword(req.Password) {
+		s.addEvent("login", 0, 0, "fail", "credenciales inválidas")
+		unauthorized(w, "Credenciales inválidas")
+		return
+	}
+	token := randomToken()
+	s.tokens[token] = u.ID
+	s.addEvent("login", u.ID, 0, "ok", "login correcto")
+
+	writeJSON(w, 200, map[string]any{
+		"token": token,
+		"user": map[string]any{"id": u.ID, "nombre": u.Nombre, "correo": u.Correo, "rol": u.Rol},
+	})
+}
+
+// -----------------------------
+// Handlers - Books list/search (Módulo C + B lectura)
+// -----------------------------
+func (s *Store) handleListBooks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		badRequest(w, "Use GET")
+		return
+	}
+
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	genero := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("genero")))
+	formato := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("formato")))
+	idioma := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("idioma")))
+	minPriceStr := strings.TrimSpace(r.URL.Query().Get("minPrice"))
+	maxPriceStr := strings.TrimSpace(r.URL.Query().Get("maxPrice"))
+
+	var minPrice, maxPrice float64
+	var err error
+	if minPriceStr != "" {
+		minPrice, err = strconv.ParseFloat(minPriceStr, 64)
+		if err != nil {
+			badRequest(w, "minPrice inválido")
+			return
+		}
+	}
+	if maxPriceStr != "" {
+		maxPrice, err = strconv.ParseFloat(maxPriceStr, 64)
+		if err != nil {
+			badRequest(w, "maxPrice inválido")
+			return
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := []Book{}
+	for _, b := range s.booksByID {
+		// filtro por activo (solo mostrar activos al público)
+		if !b.Activo {
+			continue
+		}
+		// filtros
+		if genero != "" && strings.ToLower(b.Genero) != genero {
+			continue
+		}
+		if formato != "" && strings.ToLower(b.Formato) != formato {
+			continue
+		}
+		if idioma != "" && strings.ToLower(b.Idioma) != idioma {
+			continue
+		}
+		if minPriceStr != "" && b.Precio < minPrice && !b.Gratis {
+			continue
+		}
+		if maxPriceStr != "" && b.Precio > maxPrice && !b.Gratis {
+			continue
+		}
+		// búsqueda
+		if q != "" {
+			blob := strings.ToLower(b.Titulo + " " + b.Autor + " " + b.Genero + " " + b.Descripcion + " " + strings.Join(b.Palabras, " "))
+			if !strings.Contains(blob, q) {
+				continue
+			}
+		}
+
+		out = append(out, *b)
+	}
+	writeJSON(w, 200, map[string]any{"books": out})
+}
+
+// -----------------------------
+// Admin Books (Módulo B CRUD)
+// -----------------------------
+func (s *Store) handleAdminBooks(w http.ResponseWriter, r *http.Request) {
+	// POST /admin/books
+	if r.Method != http.MethodPost {
+		badRequest(w, "Use POST")
+		return
+	}
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+	if err := requireRole(u, RoleAdmin); err != nil {
+		forbidden(w, "Solo admin")
+		return
+	}
+
+	var req Book
+	if err := readJSON(r, &req); err != nil {
+		badRequest(w, "JSON inválido: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.Titulo) == "" || strings.TrimSpace(req.Autor) == "" || strings.TrimSpace(req.Genero) == "" {
+		badRequest(w, "titulo/autor/genero son obligatorios")
+		return
+	}
+	req.Formato = strings.ToLower(strings.TrimSpace(req.Formato))
+	if req.Formato != "pdf" && req.Formato != "epub" {
+		badRequest(w, "formato debe ser pdf o epub")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	req.ID = s.nextBookID
+	s.nextBookID++
+	req.Activo = true
+
+	// ruta por defecto si no mandan
+	if strings.TrimSpace(req.StoragePath) == "" {
+		req.StoragePath = fmt.Sprintf("ebooks/%d/", req.ID)
+	}
+	s.booksByID[req.ID] = &req
+	s.addEvent("alta_libro", u.ID, req.ID, "ok", "libro creado por admin")
+
+	writeJSON(w, 201, map[string]any{"msg": "Libro creado", "book": req})
+}
+
+func (s *Store) handleAdminBookByID(w http.ResponseWriter, r *http.Request) {
+	// PUT /admin/books/{id}
+	// DELETE /admin/books/{id} -> inactivar
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+	if err := requireRole(u, RoleAdmin); err != nil {
+		forbidden(w, "Solo admin")
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/admin/books/")
+	bookID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || bookID <= 0 {
+		badRequest(w, "ID inválido")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, ok := s.booksByID[bookID]
+	if !ok {
+		writeJSON(w, 404, map[string]any{"error": "Libro no encontrado"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPut:
+		var req Book
+		if err := readJSON(r, &req); err != nil {
+			badRequest(w, "JSON inválido: "+err.Error())
+			return
+		}
+		// actualizar campos permitidos
+		if strings.TrimSpace(req.Titulo) != "" { b.Titulo = req.Titulo }
+		if strings.TrimSpace(req.Autor) != "" { b.Autor = req.Autor }
+		if strings.TrimSpace(req.Genero) != "" { b.Genero = req.Genero }
+		if strings.TrimSpace(req.Descripcion) != "" { b.Descripcion = req.Descripcion }
+		if strings.TrimSpace(req.Idioma) != "" { b.Idioma = req.Idioma }
+		if req.Anio != 0 { b.Anio = req.Anio }
+		if req.Palabras != nil { b.Palabras = req.Palabras }
+		if req.Formato != "" {
+			f := strings.ToLower(strings.TrimSpace(req.Formato))
+			if f == "pdf" || f == "epub" {
+				b.Formato = f
+			}
+		}
+		// pago/archivo
+		b.Precio = req.Precio
+		b.Gratis = req.Gratis
+		if strings.TrimSpace(req.FileName) != "" { b.FileName = req.FileName }
+		if strings.TrimSpace(req.StoragePath) != "" { b.StoragePath = req.StoragePath }
+		b.Activo = req.Activo // permite activar/desactivar
+
+		s.addEvent("edicion_libro", u.ID, b.ID, "ok", "libro actualizado")
+		writeJSON(w, 200, map[string]any{"msg": "Libro actualizado", "book": b})
+
+	case http.MethodDelete:
+		// borrado lógico: inactivar
+		b.Activo = false
+		s.addEvent("baja_libro", u.ID, b.ID, "ok", "libro inactivado (borrado lógico)")
+		writeJSON(w, 200, map[string]any{"msg": "Libro inactivado", "book": b})
+
+	default:
+		badRequest(w, "Use PUT o DELETE")
+	}
+}
+
+// -----------------------------
+// Biblioteca personal (Módulo D)
+// -----------------------------
+func libKey(uid, bid int64) string {
+	return fmt.Sprintf("%d:%d", uid, bid)
+}
+
+func (s *Store) handleLibraryRoutes(w http.ResponseWriter, r *http.Request) {
+	// /me/library/{bookId}
+	// /me/library/{bookId}/favorite (POST)
+	// /me/library/{bookId}/progress (POST)
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/me/library/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 1 || parts[0] == "" {
+		badRequest(w, "Ruta inválida")
+		return
+	}
+	bookID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || bookID <= 0 {
+		badRequest(w, "bookId inválido")
+		return
+	}
+
+	// subrutas
+	if len(parts) == 1 {
+		// add/remove
+		switch r.Method {
+		case http.MethodPost:
+			s.mu.Lock()
+			defer s.mu.Unlock()
+
+			b, ok := s.booksByID[bookID]
+			if !ok || !b.Activo {
+				writeJSON(w, 404, map[string]any{"error": "Libro no disponible"})
+				return
+			}
+			k := libKey(u.ID, bookID)
+			if _, exists := s.library[k]; exists {
+				writeJSON(w, 200, map[string]any{"msg": "Ya estaba en tu biblioteca"})
+				return
+			}
+			it := &LibraryItem{
+				UserID: u.ID, BookID: bookID,
+				Favorito: false, Progreso: 0,
+				AddedAt: time.Now(), UpdatedAt: time.Now(),
+			}
+			s.library[k] = it
+			s.addEvent("biblioteca_add", u.ID, bookID, "ok", "agregado a biblioteca")
+			writeJSON(w, 201, map[string]any{"msg": "Agregado a Mi biblioteca", "item": it})
+
+		case http.MethodDelete:
+			s.mu.Lock()
+			defer s.mu.Unlock()
+
+			k := libKey(u.ID, bookID)
+			if _, exists := s.library[k]; !exists {
+				writeJSON(w, 404, map[string]any{"error": "No está en tu biblioteca"})
+				return
+			}
+			delete(s.library, k)
+			s.addEvent("biblioteca_remove", u.ID, bookID, "ok", "quitado de biblioteca")
+			writeJSON(w, 200, map[string]any{"msg": "Quitado de Mi biblioteca"})
+
+		default:
+			badRequest(w, "Use POST (agregar) o DELETE (quitar)")
+		}
+		return
+	}
+
+	// favorite/progress
+	switch parts[1] {
+	case "favorite":
+		if r.Method != http.MethodPost {
+			badRequest(w, "Use POST")
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		k := libKey(u.ID, bookID)
+		it, exists := s.library[k]
+		if !exists {
+			writeJSON(w, 404, map[string]any{"error": "Primero agrega el libro a tu biblioteca"})
+			return
+		}
+		it.Favorito = !it.Favorito
+		it.UpdatedAt = time.Now()
+		s.addEvent("biblioteca_favorito", u.ID, bookID, "ok", fmt.Sprintf("favorito=%v", it.Favorito))
+		writeJSON(w, 200, map[string]any{"msg": "Favorito actualizado", "favorito": it.Favorito})
+
+	case "progress":
+		if r.Method != http.MethodPost {
+			badRequest(w, "Use POST")
+			return
+		}
+		var req struct{ Progreso int `json:"progreso"` }
+		if err := readJSON(r, &req); err != nil {
+			badRequest(w, "JSON inválido: "+err.Error())
+			return
+		}
+		if req.Progreso < 0 || req.Progreso > 100 {
+			badRequest(w, "progreso debe ser 0-100")
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		k := libKey(u.ID, bookID)
+		it, exists := s.library[k]
+		if !exists {
+			writeJSON(w, 404, map[string]any{"error": "Primero agrega el libro a tu biblioteca"})
+			return
+		}
+		it.Progreso = req.Progreso
+		it.UpdatedAt = time.Now()
+		s.addEvent("biblioteca_progreso", u.ID, bookID, "ok", fmt.Sprintf("progreso=%d", req.Progreso))
+		writeJSON(w, 200, map[string]any{"msg": "Progreso actualizado", "progreso": it.Progreso})
+
+	default:
+		badRequest(w, "Subruta no válida. Use /favorite o /progress")
+	}
+}
+
+// -----------------------------
+// Checkout + Pago simulado (Módulo H)
+// -----------------------------
+func (s *Store) handleCheckout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		badRequest(w, "Use POST")
+		return
+	}
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+
+	// /checkout/{bookId}
+	idStr := strings.TrimPrefix(r.URL.Path, "/checkout/")
+	bookID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || bookID <= 0 {
+		badRequest(w, "bookId inválido")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, ok := s.booksByID[bookID]
+	if !ok || !b.Activo {
+		writeJSON(w, 404, map[string]any{"error": "Libro no disponible"})
+		return
+	}
+	if b.Gratis {
+		// no necesita orden, pero registramos evento
+		s.addEvent("checkout", u.ID, bookID, "info", "libro gratis - no requiere pago")
+		writeJSON(w, 200, map[string]any{"msg": "Libro gratis: no requiere pago", "book": b})
+		return
+	}
+
+	ord := &Order{
+		ID:        s.nextOrderID,
+		UserID:    u.ID,
+		BookID:    b.ID,
+		Monto:     b.Precio,
+		Estado:    OrderPending,
+		CreatedAt: time.Now(),
+	}
+	s.nextOrderID++
+	s.ordersByID[ord.ID] = ord
+	s.addEvent("checkout", u.ID, b.ID, "ok", fmt.Sprintf("orden=%d pendiente", ord.ID))
+
+	writeJSON(w, 201, map[string]any{
+		"msg": "Orden creada (pago simulado)",
+		"order": ord,
+		"nota": "Confirma el pago con: POST /payments/{orderId}/confirm?status=aprobado|rechazado",
+	})
+}
+
+func (s *Store) handlePaymentConfirm(w http.ResponseWriter, r *http.Request) {
+	// POST /payments/{orderId}/confirm?status=aprobado|rechazado
+	if r.Method != http.MethodPost {
+		badRequest(w, "Use POST")
+		return
+	}
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/payments/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 || parts[1] != "confirm" {
+		badRequest(w, "Ruta inválida. Use /payments/{orderId}/confirm")
+		return
+	}
+	orderID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || orderID <= 0 {
+		badRequest(w, "orderId inválido")
+		return
+	}
+
+	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "aprobado" && status != "rechazado" {
+		badRequest(w, "status debe ser aprobado o rechazado")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ord, ok := s.ordersByID[orderID]
+	if !ok {
+		writeJSON(w, 404, map[string]any{"error": "Orden no encontrada"})
+		return
+	}
+	if ord.UserID != u.ID && u.Rol != RoleAdmin {
+		forbidden(w, "No puedes confirmar pagos de otros usuarios")
+		return
+	}
+	if ord.Estado != OrderPending {
+		writeJSON(w, 200, map[string]any{"msg": "Orden ya confirmada", "order": ord})
+		return
+	}
+
+	now := time.Now()
+	ord.ConfirmedAt = &now
+	ord.Transaccion = "TX-" + randomToken()[:10]
+	if status == "aprobado" {
+		ord.Estado = OrderApproved
+		s.addEvent("pago", ord.UserID, ord.BookID, "ok", fmt.Sprintf("orden=%d aprobada", ord.ID))
+	} else {
+		ord.Estado = OrderRejected
+		s.addEvent("pago", ord.UserID, ord.BookID, "fail", fmt.Sprintf("orden=%d rechazada", ord.ID))
+	}
+
+	writeJSON(w, 200, map[string]any{"msg": "Pago confirmado (simulado)", "order": ord})
+}
+
+func (s *Store) hasApprovedPayment(userID, bookID int64) bool {
+	for _, o := range s.ordersByID {
+		if o.UserID == userID && o.BookID == bookID && o.Estado == OrderApproved {
+			return true
+		}
+	}
+	return false
+}
+
+// -----------------------------
+// Rutas por ID de libro (descarga) - Módulo F/H/E/G
+// -----------------------------
+func (s *Store) handleBookByIDRoutes(w http.ResponseWriter, r *http.Request) {
+	// /books/{id}/download
+	path := strings.TrimPrefix(r.URL.Path, "/books/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 {
+		badRequest(w, "Ruta inválida")
+		return
+	}
+	bookID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || bookID <= 0 {
+		badRequest(w, "id inválido")
+		return
+	}
+
+	if parts[1] == "download" {
+		s.handleDownload(w, r, bookID)
+		return
+	}
+
+	badRequest(w, "Subruta no válida. Use /download")
+}
+
+func (s *Store) handleDownload(w http.ResponseWriter, r *http.Request, bookID int64) {
+	if r.Method != http.MethodGet {
+		badRequest(w, "Use GET")
+		return
+	}
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, "Debes iniciar sesión (Bearer token)")
+		return
+	}
+
+	s.mu.Lock()
+	b, ok := s.booksByID[bookID]
+	if !ok {
+		s.addEvent("descarga", u.ID, bookID, "fail", "libro no existe")
+		s.mu.Unlock()
+		writeJSON(w, 404, map[string]any{"error": "Libro no encontrado"})
+		return
+	}
+
+	// reglas: activo
+	if !b.Activo {
+		s.addEvent("descarga", u.ID, bookID, "fail", "libro inactivo")
+		s.mu.Unlock()
+		forbidden(w, "Libro no disponible")
+		return
+	}
+	// archivo asociado
+	if strings.TrimSpace(b.FileName) == "" {
+		s.addEvent("descarga", u.ID, bookID, "fail", "sin archivo asociado")
+		s.mu.Unlock()
+		writeJSON(w, 404, map[string]any{"error": "Archivo no disponible"})
+		return
+	}
+
+	// permiso: gratis o pago aprobado
+	allowed := b.Gratis
+	if !allowed {
+		allowed = s.hasApprovedPayment(u.ID, b.ID)
+	}
+	if !allowed {
+		s.addEvent("descarga", u.ID, bookID, "fail", "pago no aprobado")
+		s.mu.Unlock()
+		forbidden(w, "Debes completar el pago para descargar")
+		return
+	}
+
+	// construye ruta segura
+	fullPath, perr := safeJoinStorage(storageRoot, b.StoragePath, b.FileName)
+	s.mu.Unlock()
+	if perr != nil {
+		writeJSON(w, 403, map[string]any{"error": "Ruta inválida"})
+		return
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil || info.IsDir() {
+		// registra fallo
+		s.mu.Lock()
+		s.addEvent("descarga", u.ID, bookID, "fail", "archivo no encontrado en storage")
+		s.mu.Unlock()
+
+		writeJSON(w, 404, map[string]any{"error": "Archivo no encontrado"})
+		return
+	}
+
+	ext := filepath.Ext(b.FileName)
+	w.Header().Set("Content-Type", contentTypeForExt(ext))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(b.FileName)))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	// registra éxito
+	s.mu.Lock()
+	s.addEvent("descarga", u.ID, bookID, "ok", "descarga exitosa")
+	s.mu.Unlock()
+
+	http.ServeFile(w, r, fullPath)
+}
+
+// -----------------------------
+// Auditoría (Admin)
+// -----------------------------
+func (s *Store) handleAdminEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		badRequest(w, "Use GET")
+		return
+	}
+	u, err := s.authFromRequest(r)
+	if err != nil {
+		unauthorized(w, err.Error())
+		return
+	}
+	if err := requireRole(u, RoleAdmin); err != nil {
+		forbidden(w, "Solo admin")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	writeJSON(w, 200, map[string]any{
+		"events": s.events,
+	})
+}
