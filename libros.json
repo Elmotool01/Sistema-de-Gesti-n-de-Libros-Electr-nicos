@@ -1,0 +1,140 @@
+[
+  {
+    "id": 2,
+    "titulo": "The Pragmatic Programmer",
+    "autor": "Andrew Hunt \u0026 David Thomas",
+    "anio": 1999
+  },
+  {
+    "id": 3,
+    "titulo": "Design Patterns",
+    "autor": "Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides",
+    "anio": 1994
+  },
+  {
+    "id": 4,
+    "titulo": "Refactoring",
+    "autor": "Martin Fowler",
+    "anio": 1999
+  },
+  {
+    "id": 5,
+    "titulo": "Working Effectively with Legacy Code",
+    "autor": "Michael C. Feathers",
+    "anio": 2004
+  },
+  {
+    "id": 6,
+    "titulo": "Introduction to Algorithms",
+    "autor": "Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein",
+    "anio": 2009
+  },
+  {
+    "id": 7,
+    "titulo": "Code Complete",
+    "autor": "Steve McConnell",
+    "anio": 2004
+  },
+  {
+    "id": 8,
+    "titulo": "The Clean Coder",
+    "autor": "Robert C. Martin",
+    "anio": 2011
+  },
+  {
+    "id": 9,
+    "titulo": "Effective Java",
+    "autor": "Joshua Bloch",
+    "anio": 2018
+  },
+  {
+    "id": 10,
+    "titulo": "Head First Design Patterns",
+    "autor": "Eric Freeman \u0026 Elisabeth Robson",
+    "anio": 2004
+  },
+  {
+    "id": 11,
+    "titulo": "The Go Programming Language",
+    "autor": "Alan A. A. Donovan \u0026 Brian W. Kernighan",
+    "anio": 2015
+  },
+  {
+    "id": 12,
+    "titulo": "Pro Git",
+    "autor": "Scott Chacon \u0026 Ben Straub",
+    "anio": 2014
+  },
+  {
+    "id": 13,
+    "titulo": "Artificial Intelligence: A Modern Approach",
+    "autor": "Stuart Russell \u0026 Peter Norvig",
+    "anio": 2021
+  },
+  {
+    "id": 14,
+    "titulo": "Structure and Interpretation of Computer Programs",
+    "autor": "Harold Abelson \u0026 Gerald Jay Sussman",
+    "anio": 1996
+  },
+  {
+    "id": 15,
+    "titulo": "Computer Networks",
+    "autor": "Andrew S. Tanenbaum \u0026 David J. Wetherall",
+    "anio": 2010
+  },
+  {
+    "id": 16,
+    "titulo": "Operating System Concepts",
+    "autor": "Abraham Silberschatz, Peter B. Galvin, Greg Gagne",
+    "anio": 2018
+  },
+  {
+    "id": 17,
+    "titulo": "Compilers: Principles, Techniques, and Tools",
+    "autor": "Alfred V. Aho, Monica S. Lam, Ravi Sethi, Jeffrey D. Ullman",
+    "anio": 2006
+  },
+  {
+    "id": 19,
+    "titulo": "The Art of Computer Programming",
+    "autor": "Donald E. Knuth",
+    "anio": 2011
+  },
+  {
+    "id": 20,
+    "titulo": "The Mythical Man-Month",
+    "autor": "Frederick P. Brooks Jr.",
+    "anio": 1995
+  },
+  {
+    "id": 21,
+    "titulo": "El Señor de los Anillos Las Dos Torres",
+    "autor": "Tolkien.J.J.",
+    "anio": 1946
+  },
+  {
+    "id": 1,
+    "titulo": "Tres Millas sobre la tierra",
+    "autor": "Martine. F",
+    "anio": 2025
+  },
+  {
+    "id": 22,
+    "titulo": "El Señor de los Anillos Las Dos Torres",
+    "autor": "Martinez F.",
+    "anio": 2025
+  },
+  {
+    "id": 23,
+    "titulo": "Viaje a la Costa",
+    "autor": "Luis. a Martínez",
+    "anio": 1920
+  },
+  {
+    "id": 18,
+    "titulo": "El Perfume",
+    "autor": "Martinez. F",
+    "anio": 2025
+  }
+]
