@@ -138,8 +138,8 @@ Se planteó el uso de JSON para almacenar o intercambiar datos del sistema (por 
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU-USUARIO/TU-REPOSITORIO.git
-cd TU-REPOSITORIO
+git clone [(https://github.com/Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos)
+
 ```
 
 ### 2. Verificar dependencias
@@ -159,7 +159,7 @@ go run main.go
 Ingresa a la URL que se muestre en consola (por ejemplo):
 
 ```text
-http://localhost:8080
+http://localhost:8082
 ```
 
 > **Nota:** El puerto puede variar según tu configuración en `main.go`.
