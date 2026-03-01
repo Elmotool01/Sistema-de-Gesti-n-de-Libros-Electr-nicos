@@ -1,269 +1,247 @@
-# Sistema de Gestión de Libros Electrónicos (Go + Web)
+# Sistema de Gestión de Libros Electrónicos (Go + JSON)
 
 ## Descripción del proyecto
 
-Este proyecto consiste en un **Sistema de Gestión de Libros Electrónicos** desarrollado en **Go (Golang)** con una **interfaz web**.
-Su propósito es permitir la organización, consulta y acceso a libros digitales mediante un catálogo, visualización de detalles, historial de acciones y gestión de usuarios.
+Este proyecto consiste en un **Sistema de Gestión de Libros Electrónicos** desarrollado en **Go (Golang)**, orientado a la administración y consulta de libros digitales.
 
-El sistema fue diseñado con una estructura modular para facilitar su mantenimiento, ampliación e integración con nuevas funcionalidades (por ejemplo: autenticación, módulo administrativo completo y persistencia avanzada).
+El sistema permite trabajar con libros electrónicos usando **persistencia en memoria** y **persistencia en archivo JSON**, cumpliendo con el requerimiento de que **la serialización se realiza mediante JSON**.
 
 ---
 
 ## Objetivo general
 
-Desarrollar una aplicación web en Go que permita gestionar libros electrónicos de forma organizada, ofreciendo al usuario una interfaz para consultar catálogo, revisar detalles, acceder a lectura/descarga y registrar historial de uso.
+Desarrollar una aplicación en Go para gestionar libros electrónicos, aplicando estructuras de datos, separación de responsabilidades y serialización/deserialización en formato JSON.
 
 ---
 
 ## Objetivos específicos
 
-* Implementar una **interfaz web** para visualizar libros electrónicos.
-* Organizar el proyecto usando una **estructura modular** (handlers, models, templates, static).
-* Definir **modelos de datos** para representar libros, historial y usuarios.
-* Implementar rutas HTTP para la navegación del sistema.
-* Permitir el acceso a funcionalidades como:
+* Implementar un sistema para registrar, consultar y administrar libros electrónicos.
+* Aplicar programación estructurada/modular en Go.
+* Manejar persistencia en:
 
-  * catálogo de libros
-  * detalle de libro
-  * lectura/descarga
-  * historial de acciones
-  * perfil de usuario
-* Incorporar el concepto de **serialización con JSON** para manejo/intercambio de datos.
-* Dejar una base para futuras mejoras como CRUD administrativo y base de datos persistente.
+  * **memoria**
+  * **archivo JSON**
+* Implementar serialización y deserialización de datos con JSON.
+* Organizar el código en componentes reutilizables (modelo, repositorios, interfaz y lógica principal).
+* Documentar el proyecto para su ejecución y evaluación.
 
 ---
 
 ## Tecnologías utilizadas
 
-* **Go (Golang)** – Lógica principal del sistema
-* **HTML** – Estructura de vistas
-* **CSS** – Estilos de interfaz
-* **JSON** – Serialización/deserialización de datos (según requerimiento)
-* **Git / GitHub** – Control de versiones y repositorio
+* **Go (Golang)**
+* **JSON** (serialización y almacenamiento de datos)
+* **Git / GitHub**
 
 ---
 
-## Funcionalidades implementadas
+## Funcionalidades del sistema
 
-### Módulo de usuario
+* Registro de libros electrónicos
+* Consulta/listado de libros
+* Gestión de datos desde repositorio en memoria
+* Gestión de datos desde repositorio JSON
+* Carga de libros desde archivo `libros.json`
+* Manejo de errores (archivo `errores.go`)
+* Interfaz/flujo de interacción del sistema (archivo `ui.go`)
 
-* Visualización de **catálogo de libros**
-* **Búsqueda / navegación** de libros (según implementación)
-* **Detalle de libro** (información completa)
-* **Lectura o descarga** de archivo digital (según disponibilidad)
-* **Historial** de acciones (lectura/descarga)
-* **Perfil** de usuario
-
-### Base para módulo administrativo (estructura preparada)
-
-* Gestión de libros (CRUD) *(propuesta / ampliable)*
-* Gestión de usuarios *(propuesta / ampliable)*
-* Control de disponibilidad *(propuesta / ampliable)*
+> Las funcionalidades exactas pueden variar según la versión del código cargada en el repositorio.
 
 ---
 
-## Estructura del proyecto
+## Estructura real del proyecto
 
-La estructura del proyecto está organizada por responsabilidades:
+Según el repositorio actual, el proyecto contiene archivos principales como: `main.go`, `libro.go`, `repo_json.go`, `repo_memoria.go`, `ui.go`, `errores.go` y `libros.json`, además de diagramas e imágenes. ([GitHub][1])
 
-* `main.go` → punto de entrada del sistema, configuración del servidor y rutas
-* `handlers/` → lógica de atención de solicitudes HTTP
-* `models/` → definición de estructuras de datos (Book, History, etc.)
-* `templates/` → vistas HTML renderizadas en el navegador
-* `static/` → archivos estáticos (CSS, imágenes, recursos)
-* `data/` → archivos de datos (por ejemplo JSON)
-* `db/` → lógica de acceso/persistencia (si aplica)
-* `go.mod` → definición del módulo y dependencias
-
-### Ejemplo de árbol de carpetas
+### Árbol de archivos (referencial)
 
 ```text
 .
-├── data/
-├── db/
-├── handlers/
-├── models/
-├── static/
-├── templates/
 ├── main.go
-├── go.mod
-└── README.md
+├── libro.go
+├── repo_json.go
+├── repo_memoria.go
+├── ui.go
+├── errores.go
+├── libros.json
+├── README.md
+├── Diagrama inicial.png
+└── Diagrama casos de uso.png
 ```
 
 ---
 
-## Modelado de datos (ejemplo)
+## Explicación de archivos principales
 
-El sistema utiliza estructuras (structs) en Go para representar la información.
-Ejemplo conceptual:
+### `main.go`
 
-* **Book**: id, título, autor, categoría, descripción, portada, archivo, disponibilidad
-* **History**: registro de acciones del usuario (lectura/descarga)
-* **User**: información del usuario y rol *(si aplica en la versión actual)*
+Punto de entrada del programa.
+Coordina la ejecución del sistema y el flujo principal.
+
+### `libro.go`
+
+Define la estructura de datos del libro (modelo), por ejemplo atributos como título, autor, categoría, etc.
+
+### `repo_memoria.go`
+
+Implementa el repositorio en memoria para manejar libros temporalmente durante la ejecución.
+
+### `repo_json.go`
+
+Implementa el repositorio con persistencia en JSON:
+
+* lectura del archivo JSON
+* escritura del archivo JSON
+* serialización y deserialización de datos
+
+### `libros.json`
+
+Archivo de almacenamiento de datos en formato JSON.
+
+### `ui.go`
+
+Maneja la interacción con el usuario (menús, mensajes, entradas, salidas).
+
+### `errores.go`
+
+Centraliza o define el manejo de errores del sistema.
 
 ---
 
 ## Serialización con JSON (requisito)
 
-### ¿Qué es serializar con JSON?
+### ¿Qué significa serializar con JSON?
 
-Serializar significa convertir los datos del programa (structs, slices, etc.) a un formato de texto estructurado como JSON, para poder:
+Serializar significa convertir los datos del programa (por ejemplo, structs y listas en Go) a un formato de texto estructurado como JSON.
 
-* guardar datos en archivos
-* intercambiar información entre sistemas
-* preparar respuestas de API
-* respaldar información del sistema
+### ¿Qué significa deserializar?
 
-### En Go se usa:
+Es el proceso inverso: convertir un JSON a estructuras de Go para poder trabajar con los datos en el programa.
 
-* `json.Marshal()` / `json.MarshalIndent()` → **serialización**
-* `json.Unmarshal()` → **deserialización**
+### En Go se utiliza:
 
-### Uso en el proyecto
+* `json.Marshal()` / `json.MarshalIndent()` → serializar
+* `json.Unmarshal()` → deserializar
 
-Se planteó el uso de JSON para almacenar o intercambiar datos del sistema (por ejemplo catálogo de libros o historial), cumpliendo con el requerimiento de que **la serialización se realiza mediante JSON**.
+### Aplicación en este proyecto
+
+En este sistema, la serialización JSON se utiliza para almacenar y recuperar la información de los libros desde el archivo `libros.json`, cumpliendo el requerimiento de persistencia mediante JSON.
 
 ---
 
 ## Requisitos para ejecutar el proyecto
 
-* Tener instalado **Go** (versión 1.20+ recomendada)
-* Tener configurado **Git** (opcional, para clonar)
-* Navegador web (Chrome, Edge, Firefox, etc.)
+* Tener instalado **Go** (recomendado Go 1.20 o superior)
+* Tener **Git** instalado (opcional, para clonar el repositorio)
 
 ---
 
 ## Instalación y ejecución
 
-### 1. Clonar el repositorio
+### 1) Clonar el repositorio
 
 ```bash
-git clone [(https://github.com/Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos)
-
+git clone "https://github.com/Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos.git"
+cd "Sistema-de-Gesti-n-de-Libros-Electr-nicos"
 ```
 
-### 2. Verificar dependencias
+> Si tu sistema tiene problemas con caracteres especiales/codificación del nombre de carpeta, también puedes descargar el proyecto como ZIP desde GitHub.
+
+### 2) Verificar dependencias del módulo
 
 ```bash
 go mod tidy
 ```
 
-### 3. Ejecutar el proyecto
+### 3) Ejecutar el programa
+
+```bash
+go run .
+```
+
+> También puede funcionar:
 
 ```bash
 go run main.go
 ```
 
-### 4. Abrir en el navegador
-
-Ingresa a la URL que se muestre en consola (por ejemplo):
-
-```text
-http://localhost:8082
-```
-
-> **Nota:** El puerto puede variar según tu configuración en `main.go`.
+> dependiendo de cómo estén distribuidos los archivos y paquetes en tu proyecto.
 
 ---
 
-## Flujo básico de uso
+## Ejemplo de uso (flujo general)
 
-1. Iniciar el servidor con `go run main.go`
-2. Abrir el sistema en el navegador
-3. Ingresar al catálogo de libros
-4. Seleccionar un libro para ver su detalle
-5. Ejecutar acciones como lectura o descarga
-6. Consultar el historial de uso
-7. Revisar el perfil del usuario (si está habilitado)
+1. Ejecutar el programa
+2. Mostrar menú/interfaz
+3. Seleccionar opción (registrar/listar/consultar libros)
+4. Guardar cambios en memoria o en archivo JSON
+5. Cerrar el programa
 
 ---
 
-## Arquitectura y organización del código
+## Diagramas del proyecto
 
-El proyecto se organizó con una estructura modular para mejorar la mantenibilidad:
+El repositorio incluye diagramas de apoyo para el análisis y diseño del sistema, como:
 
-* **Separación de responsabilidades**
+* `Diagrama inicial.png`
+* `Diagrama casos de uso.png` ([GitHub][1])
 
-  * Vistas (`templates`)
-  * Lógica HTTP (`handlers`)
-  * Datos (`models`)
-  * Recursos (`static`)
-* **Escalabilidad**
-
-  * Permite añadir autenticación, base de datos y panel administrativo sin rehacer todo el sistema
-* **Legibilidad**
-
-  * Facilita la comprensión del proyecto por parte de docentes/evaluadores y otros desarrolladores
+Estos diagramas ayudan a explicar el funcionamiento general del sistema y la interacción esperada del usuario.
 
 ---
 
-## Evidencias / demostración (para rúbrica)
+## Cumplimiento académico (rúbrica) – resumen
 
-Durante la presentación del proyecto se muestra:
+Este proyecto evidencia:
 
-* Estructura de carpetas y archivos
-* Código principal (`main.go`)
-* Rutas y handlers
-* Catálogo de libros
-* Detalle de libro
-* Historial
-* Navegación de la interfaz web
-
-> Se recomienda complementar este repositorio con capturas de pantalla o un video demostrativo.
+* ✅ Desarrollo en **Go**
+* ✅ Organización del código por responsabilidades
+* ✅ Implementación de lógica de gestión de libros
+* ✅ Persistencia en **JSON**
+* ✅ Serialización / deserialización
+* ✅ Documentación del proyecto (README)
+* ✅ Material de apoyo (diagramas)
 
 ---
 
-## Dificultades encontradas y solución
+## Dificultades encontradas (ejemplo)
 
-Una de las principales dificultades fue mantener compatibilidad entre la estructura existente del proyecto y nuevas mejoras (como serialización JSON o ampliación de modelos), sin afectar el funcionamiento actual.
+Durante el desarrollo se presentaron retos relacionados con:
+
+* estructuración del proyecto
+* compatibilidad de cambios
+* integración de persistencia JSON sin afectar el flujo funcional
 
 ### Solución aplicada
 
-* Se trabajó con una estrategia de **integración incremental**
-* Se evitó reemplazar archivos funcionales
-* Se añadieron componentes de forma modular para no romper el sistema
-
----
-
-## Resultados obtenidos
-
-* Sistema web funcional para gestión de libros electrónicos
-* Estructura organizada y escalable en Go
-* Implementación de vistas y navegación básica
-* Base para integrar persistencia adicional y módulo administrativo
-* Cumplimiento del requerimiento conceptual de serialización JSON
+Se trabajó de forma incremental, separando la lógica en archivos específicos (modelo, repositorio, UI y errores), permitiendo mantener una base más clara y escalable.
 
 ---
 
 ## Posibles mejoras futuras
 
-* Autenticación completa (login/registro)
-* Roles de usuario (admin/usuario)
-* CRUD completo de libros y usuarios
+* Interfaz gráfica/web completa
+* CRUD más robusto con validaciones
+* Búsqueda por autor/categoría/título
+* Login y roles de usuario
 * Conexión a base de datos (MySQL/PostgreSQL)
-* Panel administrativo con interfaz propia
-* Búsqueda avanzada y filtros por categoría/autor
-* Registro persistente de historial
-* API REST para consumo externo
-* Validaciones y manejo de errores más robusto
-
----
-
-## Conclusión
-
-Este proyecto permitió aplicar conocimientos de programación en Go, estructura modular de aplicaciones web, modelado de datos y organización de un sistema funcional orientado a la gestión de libros electrónicos. Además, deja una base sólida para futuras mejoras y para la incorporación de funcionalidades más avanzadas.
+* API REST en Go
+* Pruebas unitarias
 
 ---
 
 ## Autor
 
-**Aldebaran**
-**por cuestion de seguridad**
+**Aldebarán Centurión** *(editar si deseas otro nombre)*
+Proyecto académico – Gestión de Libros Electrónicos
 
 ---
 
-## Licencia
+## Repositorio
 
-Este proyecto se desarrolló con fines **académicos/educativos**.
+GitHub: `Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos` ([GitHub][1])
 
-*(Opcional: si deseas, puedes cambiar esta sección por una licencia MIT u otra.)*
+---
+
+[1]: https://github.com/Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos "GitHub - Elmotool01/Sistema-de-Gesti-n-de-Libros-Electr-nicos"
