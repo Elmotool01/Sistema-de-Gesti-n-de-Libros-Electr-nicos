@@ -1,0 +1,70 @@
+<!DOCTYPE html> <!-- Documento HTML5 -->
+<html lang="es"> <!-- Idioma español -->
+<head>
+  <meta charset="UTF-8"> <!-- Codificación -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Responsive -->
+  <title>Catálogo de libros</title> <!-- Título -->
+  <link rel="stylesheet" href="/static/style.css"> <!-- CSS general -->
+</head>
+<body class="page-bg"> <!-- Reutiliza fondo del sistema -->
+  <div class="container"> <!-- Contenedor principal -->
+
+    <header class="topbar"> <!-- Encabezado -->
+      <div>
+        <h1>📖 Catálogo de Libros Electrónicos</h1>
+        <p class="subtitle">Usuario: <strong>{{.UsuarioNombre}}</strong> | Rol: <strong>{{.UsuarioRol}}</strong></p>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="/" class="btn btn-secondary">Panel</a> <!-- Ir al panel principal -->
+        <a href="/logout" class="btn btn-secondary">Cerrar sesión</a> <!-- Logout -->
+      </div>
+    </header>
+
+    <section class="card"> <!-- Búsqueda catálogo -->
+      <h2 class="card-title">Buscar en catálogo</h2>
+
+      <form method="GET" action="/catalogo" class="search-form">
+        <div class="field-inline">
+          <label for="buscar">Título o categoría</label>
+          <input type="text" id="buscar" name="buscar" value="{{.Buscar}}" placeholder="Ej. Programación, Clean Code...">
+        </div>
+
+        <div class="actions-inline">
+          <button type="submit" class="btn btn-primary">Buscar</button>
+          <a href="/catalogo" class="btn btn-secondary">Limpiar</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card"> <!-- Listado tipo catálogo -->
+      <h2 class="card-title">Libros disponibles</h2>
+
+      <!-- Grilla de tarjetas de libros -->
+      <div class="catalog-grid">
+        {{if .Libros}}
+          {{range .Libros}}
+          <article class="catalog-card"> <!-- Tarjeta de libro -->
+            <div class="catalog-card-body">
+              <span class="badge badge-format">{{.Formato}}</span> <!-- Formato -->
+
+              <h3 class="catalog-title">{{.Titulo}}</h3> <!-- Título -->
+              <p class="catalog-meta"><strong>Autor:</strong> {{.Autor}}</p> <!-- Autor -->
+              <p class="catalog-meta"><strong>Categoría:</strong> {{.Categoria}}</p> <!-- Categoría -->
+              <p class="catalog-meta"><strong>Año:</strong> {{.AnioPublicacion}}</p> <!-- Año -->
+              <p class="catalog-meta"><strong>Disponibles:</strong> {{.StockLicencias}}</p> <!-- Stock -->
+
+              <div class="catalog-actions">
+                <a href="/catalogo/detalle?id={{.ID}}" class="btn btn-primary btn-sm">Ver detalle</a>
+              </div>
+            </div>
+          </article>
+          {{end}}
+        {{else}}
+          <p class="empty-row">No hay libros disponibles para mostrar.</p>
+        {{end}}
+      </div>
+    </section>
+  </div>
+</body>
+</html>

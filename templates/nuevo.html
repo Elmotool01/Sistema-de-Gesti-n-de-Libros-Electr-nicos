@@ -1,0 +1,113 @@
+<!DOCTYPE html> <!-- Indica que el documento utiliza HTML5 -->
+<html lang="es"> <!-- Inicio del documento HTML en idioma español -->
+<head>
+  <meta charset="UTF-8"> <!-- Permite tildes, ñ y caracteres especiales -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Hace la página adaptable en móviles -->
+  <title>Registrar libro</title> <!-- Título de la pestaña del navegador -->
+
+  <!-- Enlace al archivo CSS general -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<!-- Clase "form-page" para aplicar fondo azul y estilos de formulario -->
+<body class="form-page">
+  <!-- Contenedor general del formulario -->
+  <div class="form-wrapper">
+
+    <!-- Tarjeta del formulario -->
+    <section class="form-card">
+      <!-- Encabezado del formulario -->
+      <div class="form-header">
+        <h1>➕ Registrar nuevo libro</h1> <!-- Título principal -->
+        <p>Complete la información del libro electrónico para guardarlo en el sistema.</p> <!-- Texto de apoyo -->
+      </div>
+
+      <!-- Formulario que envía datos por método POST a la ruta /libros/crear -->
+      <form method="POST" action="/libros/crear" class="form-grid">
+
+        <!-- Campo: título -->
+        <div class="form-group">
+          <label for="titulo">Título</label> <!-- Etiqueta del campo -->
+          <input
+            type="text"
+            id="titulo"
+            name="titulo"
+            placeholder="Ej. Clean Code"
+            required
+          >
+        </div>
+
+        <!-- Campo: autor -->
+        <div class="form-group">
+          <label for="autor">Autor</label>
+          <input
+            type="text"
+            id="autor"
+            name="autor"
+            placeholder="Ej. Robert C. Martin"
+            required
+          >
+        </div>
+
+        <!-- Campo: categoría -->
+        <div class="form-group">
+          <label for="categoria">Categoría</label>
+          <input
+            type="text"
+            id="categoria"
+            name="categoria"
+            placeholder="Ej. Programación"
+            required
+          >
+        </div>
+
+        <!-- Campo: año de publicación -->
+        <div class="form-group">
+          <label for="anio_publicacion">Año de publicación</label>
+          <input
+            type="number"
+            id="anio_publicacion"
+            name="anio_publicacion"
+            min="0"
+            placeholder="Ej. 2026"
+            required
+          >
+        </div>
+
+        <!-- Campo: formato -->
+        <div class="form-group">
+          <label for="formato">Formato</label>
+          <select id="formato" name="formato" required>
+            <option value="">Seleccione un formato...</option>
+            <option value="PDF">PDF</option>
+            <option value="EPUB">EPUB</option>
+            <option value="MOBI">MOBI</option>
+          </select>
+        </div>
+
+        <!-- Campo: stock/licencias -->
+        <div class="form-group">
+          <label for="stock_licencias">Stock / Licencias</label>
+          <input
+            type="number"
+            id="stock_licencias"
+            name="stock_licencias"
+            min="1"
+            placeholder="Ej. 3"
+            required
+          >
+        </div>
+
+        <!-- Barra de acciones del formulario -->
+        <div class="form-actions">
+          <!-- Enlace para cancelar y volver al listado -->
+          <a href="/" class="btn btn-secondary">Cancelar</a>
+
+          <!-- Botón para guardar el libro -->
+          <button type="submit" class="btn btn-primary">💾 Guardar libro</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

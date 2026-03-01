@@ -1,0 +1,43 @@
+<!DOCTYPE html> <!-- Documento HTML5 -->
+<html lang="es"> <!-- Idioma español -->
+<head>
+  <meta charset="UTF-8"> <!-- Codificación -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Responsive -->
+  <title>Detalle del libro</title> <!-- Título -->
+  <link rel="stylesheet" href="/static/style.css"> <!-- CSS general -->
+</head>
+<body class="form-page"> <!-- Fondo azul -->
+  <div class="form-wrapper"> <!-- Contenedor centrado -->
+    <section class="form-card"> <!-- Tarjeta principal -->
+
+      <div class="form-header"> <!-- Encabezado del detalle -->
+        <h1>📘 Detalle del libro</h1>
+        <p>Usuario: <strong>{{.UsuarioNombre}}</strong> | Rol: <strong>{{.UsuarioRol}}</strong></p>
+      </div>
+
+      <div style="padding: 20px;"> <!-- Contenido del detalle -->
+        <p><strong>ID:</strong> {{.Libro.ID}}</p> <!-- ID del libro -->
+        <p><strong>Título:</strong> {{.Libro.Titulo}}</p> <!-- Título -->
+        <p><strong>Autor:</strong> {{.Libro.Autor}}</p> <!-- Autor -->
+        <p><strong>Categoría:</strong> {{.Libro.Categoria}}</p> <!-- Categoría -->
+        <p><strong>Año de publicación:</strong> {{.Libro.AnioPublicacion}}</p> <!-- Año -->
+        <p><strong>Formato:</strong> {{.Libro.Formato}}</p> <!-- Formato -->
+        <p><strong>Stock / Licencias:</strong> {{.Libro.StockLicencias}}</p> <!-- Stock/licencias -->
+
+        <!-- Aviso de demostración -->
+        <div style="margin-top: 16px; padding: 12px; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a;">
+          ℹ️ Descarga de demostración: en este paso se descargará un PDF demo (demo.pdf) para probar el flujo del sistema.
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="form-actions" style="margin-top: 18px;">
+          <a href="/catalogo" class="btn btn-secondary">⬅ Volver al catálogo</a> <!-- Volver -->
+
+          <!-- Botón de descarga real de demostración -->
+          <a href="/catalogo/descargar?id={{.Libro.ID}}" class="btn btn-primary">⬇ Descargar libro (demo)</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

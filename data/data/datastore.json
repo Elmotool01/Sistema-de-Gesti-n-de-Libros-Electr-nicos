@@ -1,0 +1,24 @@
+{
+  "libros": [
+    {
+      "id": 1,
+      "titulo": "El Principito",
+      "autor": "Antoine de Saint-Exupéry",
+      "categoria": "Literatura",
+      "descripcion": "Novela corta de literatura universal.",
+      "portada": "/static/img/el_principito.jpg",
+      "archivo": "/static/uploads/el_principito.pdf",
+      "disponible": true
+    },
+    {
+      "id": 2,
+      "titulo": "Cien años de soledad",
+      "autor": "Gabriel García Márquez",
+      "categoria": "Realismo mágico",
+      "descripcion": "Obra emblemática de la literatura latinoamericana.",
+      "portada": "/static/img/cien_anos.jpg",
+      "archivo": "/static/uploads/cien_anos_de_soledad.pdf",
+      "disponible": true
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+<!DOCTYPE html> <!-- Documento HTML5 -->
+<html lang="es"> <!-- Idioma español -->
+<head>
+  <meta charset="UTF-8"> <!-- Codificación UTF-8 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Diseño adaptable -->
+  <title>Iniciar sesión</title> <!-- Título de la pestaña -->
+  <link rel="stylesheet" href="/static/style.css"> <!-- Archivo CSS general -->
+</head>
+
+<body class="form-page"> <!-- Fondo azul reutilizando estilo de formularios -->
+  <div class="form-wrapper"> <!-- Contenedor centrado -->
+    <section class="form-card"> <!-- Tarjeta principal del login -->
+
+      <!-- Encabezado del login -->
+      <div class="form-header">
+        <h1>🔐 Iniciar sesión</h1> <!-- Título -->
+        <p>Ingrese sus credenciales para acceder al sistema de libros electrónicos.</p> <!-- Descripción -->
+      </div>
+
+      <!-- Si existe un mensaje de error (o información), se muestra -->
+      {{if .Error}}
+      <div style="margin: 16px 20px 0; padding: 10px 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-weight: 600;">
+        ⚠️ {{.Error}}
+      </div>
+      {{end}}
+
+      <!-- Formulario de login -->
+      <form method="POST" action="/login/procesar" class="form-grid">
+
+        <!-- Campo correo (ocupa una columna) -->
+        <div class="form-group">
+          <label for="correo">Correo electrónico</label>
+          <input
+            type="email"
+            id="correo"
+            name="correo"
+            placeholder="admin@ebooks.com"
+            required
+          >
+        </div>
+
+        <!-- Campo clave -->
+        <div class="form-group">
+          <label for="clave">Contraseña</label>
+          <input
+            type="password"
+            id="clave"
+            name="clave"
+            placeholder="Ingrese su contraseña"
+            required
+          >
+        </div>
+
+        <!-- Acciones -->
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">✅ Ingresar</button>
+        </div>
+      </form>
+
+      <!-- Datos de prueba (puedes quitar esto luego) -->
+      <div style="padding: 0 20px 20px; color: #475569; font-size: 0.9rem;">
+        <p><strong>Usuario de prueba:</strong> admin@ebooks.com</p>
+        <p><strong>Clave:</strong> 12345</p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

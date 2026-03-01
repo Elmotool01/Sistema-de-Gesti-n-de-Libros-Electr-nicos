@@ -1,0 +1,155 @@
+<!DOCTYPE html> <!-- Documento HTML5 -->
+<html lang="es"> <!-- Idioma español -->
+<head> <!-- Cabecera del documento -->
+  <meta charset="UTF-8"> <!-- Codificación para tildes y caracteres especiales -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Diseño adaptable -->
+  <title>Panel de libros</title> <!-- Título de la pestaña -->
+  <link rel="stylesheet" href="/static/style.css"> <!-- Enlace al archivo CSS -->
+</head> <!-- Fin cabecera -->
+
+<body class="page-bg"> <!-- Cuerpo de la página con estilo de fondo principal -->
+  <div class="container"> <!-- Contenedor principal centrado -->
+
+    <header class="topbar"> <!-- Barra superior -->
+      <div> <!-- Bloque izquierdo del encabezado -->
+        <h1>📚 Sistema de Gestión de Libros Electrónicos</h1> <!-- Título principal -->
+        <p class="subtitle">Panel principal · CRUD + búsqueda + dashboard</p> <!-- Subtítulo -->
+
+        <!-- Información del usuario autenticado -->
+        <p class="subtitle" style="margin-top: 8px;">
+          👤 Usuario: <strong>{{.UsuarioNombre}}</strong> | Rol: <strong>{{.UsuarioRol}}</strong>
+        </p>
+      </div> <!-- Fin bloque izquierdo -->
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;"> <!-- Bloque derecho de botones -->
+        <!-- Botón de acceso al catálogo (visible para cualquier usuario autenticado) -->
+        <a href="/catalogo" class="btn btn-secondary">📖 Catálogo</a>
+
+        <!-- Botón crear libro (solo si el usuario tiene permiso) -->
+        {{if .PuedeCrear}}
+        <a href="/libros/nuevo" class="btn btn-primary">➕ Registrar nuevo libro</a>
+        {{end}}
+
+        <!-- Botón para cerrar sesión -->
+        <a href="/logout" class="btn btn-secondary">Cerrar sesión</a>
+      </div> <!-- Fin bloque derecho -->
+    </header> <!-- Fin topbar -->
+
+    <!-- Mensaje de éxito/información -->
+    {{if .Mensaje}}
+      <div class="alert-success">
+        ✅ {{.Mensaje}}
+      </div>
+    {{end}}
+
+    <!-- Tarjeta de resumen / dashboard -->
+    <section class="card">
+      <h2 class="card-title">Resumen del sistema</h2>
+
+      <div class="stats-grid"> <!-- Grilla de estadísticas -->
+        <div class="stat-box">
+          <p class="stat-label">Total de libros</p>
+          <h3 class="stat-value">{{.Stats.TotalLibros}}</h3>
+        </div>
+
+        <div class="stat-box">
+          <p class="stat-label">Formato PDF</p>
+          <h3 class="stat-value">{{.Stats.TotalPDF}}</h3>
+        </div>
+
+        <div class="stat-box">
+          <p class="stat-label">Formato EPUB</p>
+          <h3 class="stat-value">{{.Stats.TotalEPUB}}</h3>
+        </div>
+
+        <div class="stat-box">
+          <p class="stat-label">Formato MOBI</p>
+          <h3 class="stat-value">{{.Stats.TotalMOBI}}</h3>
+        </div>
+      </div> <!-- Fin grilla dashboard -->
+    </section>
+
+    <!-- Tarjeta de búsqueda -->
+    <section class="card">
+      <h2 class="card-title">Buscar libros</h2>
+
+      <form method="GET" action="/" class="search-form"> <!-- Formulario de búsqueda -->
+        <div class="field-inline"> <!-- Grupo de campo -->
+          <label for="buscar">Título</label> <!-- Etiqueta -->
+          <input type="text" id="buscar" name="buscar" value="{{.Buscar}}" placeholder="Escribe un título..."> <!-- Input -->
+        </div>
+
+        <div class="actions-inline"> <!-- Botones búsqueda -->
+          <button type="submit" class="btn btn-primary">Buscar</button> <!-- Buscar -->
+          <a href="/" class="btn btn-secondary">Limpiar</a> <!-- Limpiar -->
+        </div>
+      </form>
+    </section>
+
+    <!-- Tarjeta de listado -->
+    <section class="card">
+      <h2 class="card-title">Listado de libros</h2>
+
+      <div class="table-wrap"> <!-- Contenedor con scroll horizontal -->
+        <table class="table"> <!-- Tabla principal -->
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Título</th>
+              <th>Autor</th>
+              <th>Categoría</th>
+              <th>Año</th>
+              <th>Formato</th>
+              <th>Stock</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {{if .Libros}} <!-- Si hay libros -->
+              {{range .Libros}} <!-- Recorre cada libro -->
+              <tr>
+                <td>{{.ID}}</td> <!-- ID -->
+                <td><strong>{{.Titulo}}</strong></td> <!-- Título -->
+                <td>{{.Autor}}</td> <!-- Autor -->
+                <td><span class="badge">{{.Categoria}}</span></td> <!-- Categoría -->
+                <td>{{.AnioPublicacion}}</td> <!-- Año -->
+                <td><span class="badge badge-format">{{.Formato}}</span></td> <!-- Formato -->
+                <td>{{.StockLicencias}}</td> <!-- Stock -->
+
+                <td> <!-- Columna de acciones -->
+                  <div class="row-actions">
+                    <!-- Botón editar (solo ADMIN/OPERADOR) -->
+                    {{if $.PuedeEditar}}
+                    <a href="/libros/editar?id={{.ID}}" class="btn btn-warning btn-sm">Editar</a>
+                    {{end}}
+
+                    <!-- Botón eliminar (solo ADMIN) -->
+                    {{if $.PuedeEliminar}}
+                    <form method="POST" action="/libros/eliminar" onsubmit="return confirm('¿Deseas eliminar este libro?');">
+                      <input type="hidden" name="id" value="{{.ID}}">
+                      <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                    </form>
+                    {{end}}
+
+                    <!-- Etiqueta solo lectura si no tiene permisos de edición/eliminación -->
+                    {{if and (not $.PuedeEditar) (not $.PuedeEliminar)}}
+                    <span class="badge">Solo lectura</span>
+                    {{end}}
+                  </div>
+                </td> <!-- Fin columna acciones -->
+              </tr>
+              {{end}} <!-- Fin range -->
+            {{else}} <!-- Si no hay libros -->
+              <tr>
+                <td colspan="8" class="empty-row">No hay libros registrados o no hay resultados para la búsqueda.</td>
+              </tr>
+            {{end}} <!-- Fin if Libros -->
+          </tbody>
+        </table>
+      </div> <!-- Fin table-wrap -->
+    </section> <!-- Fin tarjeta listado -->
+
+  </div> <!-- Fin container -->
+</body> <!-- Fin body -->
+</html> <!-- Fin documento -->
